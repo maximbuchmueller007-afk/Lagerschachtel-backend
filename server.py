@@ -25,12 +25,13 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
-        "https://lagerschachtel-frontend-78s6.vercel.app"
+        "https://lagerschachtel-frontend-78s6.vercel.app",
         "https://www.die-lagerschachtel.de"
     ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
 )
 api_router = APIRouter(prefix="/api")
 
