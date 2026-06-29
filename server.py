@@ -32,7 +32,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-)
 api_router = APIRouter(prefix="/api")
 
 # ---------------- CORS ----------------
