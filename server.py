@@ -1,4 +1,3 @@
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
@@ -21,6 +20,7 @@ COMPANY_EMAIL = os.getenv("COMPANY_EMAIL", "info@die-lagerschachtel.de")
 
 # ---------------- APP ----------------
 app = FastAPI()
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -32,16 +32,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-api_router = APIRouter(prefix="/api")
 
-# ---------------- CORS ----------------
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+api_router = APIRouter(prefix="/api")
 
 # ---------------- LOGGING ----------------
 logging.basicConfig(level=logging.INFO)
