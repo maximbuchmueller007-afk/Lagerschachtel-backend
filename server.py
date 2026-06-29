@@ -1,37 +1,57 @@
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, APIRouter
-from dotenv import load_dotenv
-from starlette.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, ConfigDict, EmailStr
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, EmailStr
 from pathlib import Path
+from dotenv import load_dotenv
+from typing import Optional
 import os
-import logging
 import resend
 import asyncio
+import logging
 
 # ---------------- CONFIG ----------------
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+load_dotenv(ROOT_DIR / ".env")
 
-resend.api_key = os.environ.get('RESEND_API_KEY', '')
+resend.api_key = os.getenv("RESEND_API_KEY")
 
-SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "noreply@die-lagerschachtel.de")
-COMPANY_EMAIL = os.environ.get("COMPANY_EMAIL", "info@die-lagerschachtel.de")
+SENDER_EMAIL = os.getenv("SENDER_EMAIL", "noreply@die-lagerschachtel.de")
+COMPANY_EMAIL = os.getenv("COMPANY_EMAIL", "info@die-lagerschachtel.de")
 
+# ---------------- APP ----------------
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "https://lagerschachtel-frontend-78s6.vercel.app"
+        "https://www.die-lagerschachtel.de"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 api_router = APIRouter(prefix="/api")
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+# ---------------- CORS ----------------
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
+
+# ---------------- LOGGING ----------------
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ---------------- MODELS ----------------
 class ContainerInquiry(BaseModel):
-    model_config = ConfigDict(extra="ignore")
     container_size: str
     start_date: str
-    end_date: str
+    end_date: Optional[str] = None
     location_area: str
     name: str
     email: EmailStr
@@ -39,7 +59,6 @@ class ContainerInquiry(BaseModel):
 
 
 class TireInquiry(BaseModel):
-    model_config = ConfigDict(extra="ignore")
     tire_size: str
     tire_sets: int
     name: str
@@ -48,7 +67,6 @@ class TireInquiry(BaseModel):
 
 
 class CarInquiry(BaseModel):
-    model_config = ConfigDict(extra="ignore")
     car_model: str
     storage_duration: str
     name: str
@@ -56,46 +74,52 @@ class CarInquiry(BaseModel):
     phone: str
 
 
-# ---------------- EMAIL FUNCTION ----------------
-async def send_email_async(subject: str, html_content: str):
-    params = {
-        "from": SENDER_EMAIL,
-        "to": [COMPANY_EMAIL],
-        "subject": subject,
-        "html": html_content
-    }
-
+# ---------------- EMAIL ----------------
+async def send_email(subject: str, html: str):
     try:
+        params = {
+            "from": SENDER_EMAIL,
+            "to": [COMPANY_EMAIL],
+            "subject": subject,
+            "html": html
+        }
+
         email = await asyncio.to_thread(resend.Emails.send, params)
         logger.info(f"Email sent: {email.get('id')}")
         return email
+
     except Exception as e:
-        logger.error(f"Email failed: {str(e)}")
+        logger.error(f"Email error: {str(e)}")
         raise
 
 
 # ---------------- ROUTES ----------------
 @api_router.get("/")
 async def root():
-    return {"message": "Die Lagerschachtel API"}
+    return {"status": "API running"}
 
 
 @api_router.post("/inquiries/container")
 async def container_inquiry(inquiry: ContainerInquiry):
 
+    end_date = inquiry.end_date or "unbefristet"
+
     html = f"""
-    <h2>Neue Container Anfrage</h2>
-    <p><b>Container:</b> {inquiry.container_size}</p>
+    <h2>Container Anfrage</h2>
+    <p><b>Größe:</b> {inquiry.container_size}</p>
     <p><b>Start:</b> {inquiry.start_date}</p>
-    <p><b>Mietende:</b> {inquiry.end_date}</p>
+    <p><b>Ende:</b> {end_date}</p>
     <p><b>Ort:</b> {inquiry.location_area}</p>
     <p><b>Name:</b> {inquiry.name}</p>
     <p><b>Email:</b> {inquiry.email}</p>
     <p><b>Telefon:</b> {inquiry.phone}</p>
     """
 
-    await send_email_async("Container Anfrage", html)
-    return {"status": "success"}
+    try:
+        await send_email("Container Anfrage", html)
+        return {"status": "success"}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
 
 
 @api_router.post("/inquiries/tires")
@@ -113,8 +137,11 @@ async def tire_inquiry(inquiry: TireInquiry):
     <p><b>Telefon:</b> {inquiry.phone}</p>
     """
 
-    await send_email_async("Reifen Anfrage", html)
-    return {"status": "success"}
+    try:
+        await send_email("Reifen Anfrage", html)
+        return {"status": "success"}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
 
 
 @api_router.post("/inquiries/car")
@@ -129,17 +156,12 @@ async def car_inquiry(inquiry: CarInquiry):
     <p><b>Telefon:</b> {inquiry.phone}</p>
     """
 
-    await send_email_async("Auto Anfrage", html)
-    return {"status": "success"}
+    try:
+        await send_email("Auto Anfrage", html)
+        return {"status": "success"}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
 
 
-# ---------------- APP SETUP ----------------
+# ---------------- REGISTER ROUTER ----------------
 app.include_router(api_router)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
